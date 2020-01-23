@@ -1,0 +1,89 @@
+
+### Json create new Event ###
+{
+    "token" : "Put Your Token here",
+	"type" : "NE",
+	"organization" : "Your Organization",
+	"measure" : "Your Measure Titel",
+	"template" : 2,
+	"measure_periode" : "dd.mm-dd.mm.yyyy",
+	"startdate" : "yyyy-mm-dd",
+	"enddate" : "yyyy-mm-dd"
+}
+
+reply:
+
+{
+    "enddate" : "yyyy-mm-dd",
+    "id": 12,
+    "measure" : "Your Measure Titel",
+    "measure_periode" : "dd.mm-dd.mm.yyyy",
+    "organization" : "Your Organization",
+    "startdate" : "yyyy-mm-dd",
+    "template": 2,
+    "type": "NE"
+}
+
+### Json Request Templates ###
+
+{
+    "token" : "Put Your Token here",
+    "type" : "RT"
+}
+
+reply:
+
+[
+    {
+        "filename": "xxx.pdf",
+        "id": 1
+    },
+    {
+        "filename": "xxx.pdf",
+        "id": 2
+    }
+]
+
+### Json create new Person ###
+#### Case1: with Groups ####
+
+{
+    "token" : "Put Your Token here",
+	"type" : "NP",
+	"eid" : 1,
+	"Name" : "Mia Killing",
+	"University" : "Freie Universität Mordor",
+	"gid" : 7
+}
+
+reply:
+
+{
+    "result": null
+}
+
+#### Case2: without Groups ####
+
+{
+    "token" : "Put Your Token here",
+	"type" : "NP",
+	"eid" : 1,
+	"Name" : "Mia Killing",
+	"University" : "Freie Universität Mordor"
+}
+
+reply:
+
+{
+    "result": null
+}
+
+### JSON get Generated PDFs ###
+
+{
+    "token" : "Put Your Token here",
+	"type" : "GP",
+	"eid" : 1
+}
+
+reply long base64 encoded PDF

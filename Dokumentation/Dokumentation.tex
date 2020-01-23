@@ -1,0 +1,986 @@
+\documentclass[12pt,parskip=full, pagea4]{scrreprt}
+\usepackage{ucs}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{setspace}
+\usepackage{scrdate}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amstext}
+\usepackage{amsfonts}
+\usepackage{mathrsfs}
+\usepackage{array}
+\usepackage{subfig}
+\usepackage{capt-of}
+\usepackage{enumitem}
+\usepackage{color}
+\usepackage{url}
+\usepackage{hyperref}
+
+\usepackage{bera}% optional: just to have a nice mono-spaced font
+\usepackage{listings}
+\usepackage{xcolor}
+
+\colorlet{punct}{red!60!black}
+\definecolor{background}{HTML}{EEEEEE}
+\definecolor{delim}{RGB}{20,105,176}
+\colorlet{numb}{magenta!60!black}
+
+\lstdefinelanguage{json}{
+	basicstyle=\normalfont\ttfamily,
+	numbers=left,
+	numberstyle=\scriptsize,
+	stepnumber=1,
+	numbersep=8pt,
+	showstringspaces=false,
+	breaklines=true,
+	frame=lines,
+	backgroundcolor=\color{background},
+	literate=
+	*{0}{{{\color{numb}0}}}{1}
+	{1}{{{\color{numb}1}}}{1}
+	{2}{{{\color{numb}2}}}{1}
+	{3}{{{\color{numb}3}}}{1}
+	{4}{{{\color{numb}4}}}{1}
+	{5}{{{\color{numb}5}}}{1}
+	{6}{{{\color{numb}6}}}{1}
+	{7}{{{\color{numb}7}}}{1}
+	{8}{{{\color{numb}8}}}{1}
+	{9}{{{\color{numb}9}}}{1}
+	{:}{{{\color{punct}{:}}}}{1}
+	{,}{{{\color{punct}{,}}}}{1}
+	{\{}{{{\color{delim}{\{}}}}{1}
+	{\}}{{{\color{delim}{\}}}}}{1}
+	{[}{{{\color{delim}{[}}}}{1}
+	{]}{{{\color{delim}{]}}}}{1}
+	{Ö}{{\"O}}1
+	{Ä}{{\"A}}1
+	{Ü}{{\"U}}1
+	{ü}{{\"u}}1
+	{ä}{{\"a}}1
+	{ö}{{\"o}}1,
+}
+
+\lstset{basicstyle=\ttfamily}
+
+
+\begin{document}
+
+	\title{BMBF-Listen Generator}
+	\date{\today}
+	\author{Jörn Tillmanns - Erzeugen des PDF und CSV Verarbeitung \and
+	Konfuzzyus - Websocket und Datenbank}
+	
+	\maketitle
+	
+	\clearpage
+
+	\tableofcontents
+	
+	\part{\"Uberblick}
+		
+		\chapter{Anforderung}
+			Die Webanwendung \textbf{BMBF-Listen Generator} wird aus Daten, welche der Anwendung übersendet werden, mithilfe einer Vorlage ein PDF-File generieren, welches die Listen für das BMBF darstellen.
+			
+			\section{Kriterien}
+			
+			\begin{itemize}
+				\item Automatisierbare Ansteuerung via JSON-Post- und -Get-Requests
+				\item Ausspielen der erzeugten PDF Dateien
+				\item Gruppentrennung auf verschiedene Seiten
+				\item Fehlerkontrolle
+			\end{itemize}
+			
+		\chapter{Produkteinsatz}
+		
+			\section{Anwendungsbereiche}
+			
+			\begin{itemize}
+				\item Vereine
+				\item gemeinnützige Organisationen
+			\end{itemize}
+			
+			\section{Betriebsbedingungen}
+			
+			\begin{itemize}
+				\item Server durch Aufrufer via Netzwerk erreichbar
+				\item Notwendige Software ist auf Server installiert
+			\end{itemize}
+		
+		\chapter{Produktumgebung}
+			
+			\section{Server}
+			
+			\begin{itemize}
+				\item Framework: flask
+				\item Datenbank: MySQL/MariaDB
+				\item Programmiersprachen: python
+				\item Betriebssystem: Linux 64-bit
+			\end{itemize}
+		
+			Sowie folgende Python-Erweiterungen:
+			
+			\begin{itemize}
+				\item fdfgen
+				\item sh
+				\item pathlib
+			\end{itemize}
+		
+		\chapter{Produktfunktionen}
+		
+			\section{Event-Basierte Funktionen}
+			
+			\begin{description}
+				\item[F01.00]
+				\textit{Neues Event}
+				Mit Hilfe eines Webaufrufs mit Parametern lässt sich dem Generator ein neues Event hinzufügen.
+				\item[F02.00]
+				\textit{PDF-Generieren} 
+				Die Anforderung und Generierung des PDF kann mittels eines Webaufrufs mit Parametern ausgel\"ost werden.
+			\end{description}
+			
+			\section{Teilnehmer-basierte Funktionen}
+			
+			\begin{description}
+				\item[F03.00]
+				\textit{Teilnehmer hinzuf\"ugen} 
+				Mit Hilfe eines Webaufrufs mit Parametern lässt sich dem Generator ein neuer Teilnehmer zu einem bestehenden Event hinzufügen.
+				\item[F04.00]
+				\textit{Teilnehmer mit Gruppe hinzuf\"ugen:} 
+				Mit Hilfe eines Webaufrufs mit Parametern lässt sich dem Generator ein neuer Teilnehmer zu einem bestehenden Event mit einer vorhandenen oder neuen Gruppe hinzufügen. Gruppen gruppieren Teilnehmer.
+			\end{description}
+		
+		\chapter{Sicherheitsmodell}
+		
+			Zur Datensicherheit werden sogenannte API-Tokens verwendet, hierdurch kann ein Aufrufer nur seine Daten anfordern und auch nur an seinen eigen erstellten Events Teilnehmer hinzufügen oder das PDF generieren. Es gibt keinen Administrator API-Token, daher kann nur der Admin des Webservers alle Daten beeinflussen.
+			
+		\chapter{Datenbankentwurf}
+		
+			Die Datenbank besteht aus 7 Tabellen. Alle Tabellen haben ein, in der Konfigurationsdatei stehendes, Prefix voran. Bei unten stehenden Tabellen ist dies "bmbf". Hier eine Auflistung der Tabellen:
+			
+			\begin{itemize}
+				\item bmbf\_\_auth
+				\item bmbf\_\_events
+				\item bmbf\_\_groups
+				\item bmbf\_\_mapping
+				\item bmbf\_\_participants
+				\item bmbf\_\_templates
+				\item bmbf\_\_times
+			\end{itemize}
+		
+	
+			\section{bmbf\_\_auth}
+			
+			Wird genutzt um einen Aufrufer mittels des übermittelten API-Token zu erkennen. Es wird jedem API-Token auch eine eindeutige Nutzer-ID zugeordnet.
+			
+			\section{bmbf\_\_events}
+			
+			In dieser Tabelle werden alle relevanten Daten für ein Event abgelegt. Dies umfasst unter anderem die Organisation, Maßnahmenbeschreibung und die Zeitdauer des Events.
+			
+			\section{bmbf\_\_groups}
+			
+			In dieser Tabelle werden alle Gruppen, die das System kennt, einem Event zugeordnet. Die angegebenen Gruppennamen sind Eventspezifisch. Gleiche Gruppennamen in verschiedenen Events sind erlaubt.
+			
+			\section{bmbf\_\_mapping}
+			
+			In dieser Tabelle erfolgt die Zuordnung von Events zu Nutzer.
+			
+			\section{bmbf\_\_participants}
+			
+			In dieser Tabelle stehen die Teilnehmer aller Events, diese werden eindeutig den Events und eventuell vorhandenen Gruppen zugeordnet.
+			
+			\section{bmbf\_\_templates}
+			
+			In dieser Tabelle werden durch den Admin des Systems alle auf dem System abgelegten ausfüllbaren PDF's eingespeichert und können anschließend durch Aufrufer benutzt werden.
+			
+			\section{bmbf\_\_times}
+			
+			In dieser Tabelle wird das Anfangs- und Enddatum eines Events im Mysql-Date-Format gespeichert. Es erfolgt eine eindeutige Zuordnung zu einem Event. 
+					
+		\chapter{Schnittstellen}
+		
+		Die API-Schnittstelle wird in "Teil 3 - Implementierung" näher beschrieben. 
+		
+		\chapter{Qualitätszielbestimmung}
+		
+			\begin{center}
+				\begin{tabular}{||l|c|c|c|c||} 
+					\hline
+					~ & sehr wichtig & wichtig & weniger wichtig & unwichtig\\
+					\hline \hline
+					\textit{Robustheit}~ & \textbf{X}~ & ~ ~ ~ & ~ ~ ~ &  ~ ~ ~ \\
+					\hline
+					\textit{Zuverlässigkeit}~ & ~ ~ ~ &  \textbf{X}~ &  ~ ~ ~ &  ~ ~ ~ \\
+					\hline
+					\textit{Sicherheit}~ & ~ ~ ~ &  \textbf{X}~ &  ~ ~ ~ &  ~ ~ ~ \\
+					\hline
+					\textit{Korrektheit}~ & ~ ~ ~ &  \textbf{X}~ &  ~ ~ ~ &  ~ ~ ~ \\
+					\hline
+					\textit{Benutzerfreundlichkeit}~ &  ~ ~ ~ & ~ ~ ~ &  ~ ~ ~ &  \textbf{X}~ \\
+					\hline
+					\textit{Übertragbarkeit}~ &  ~ ~ ~ & ~ ~ ~ &  \textbf{X}~ &  ~ ~ ~ \\
+					\hline
+					\textit{Effizienz}~ &  ~ ~ ~ &  ~ ~ ~ & \textbf{X}~ &  ~ ~ ~ \\
+					\hline
+					\textit{Attraktivität}~ &  ~ ~ ~ &  ~ ~ ~ & ~ ~ ~ &  \textbf{X}~ \\
+					\hline
+					\textit{Wartbarkeit}~ &  ~ ~ ~ & \textbf{X}~ &  ~ ~ ~ &  ~ ~ ~ \\
+					\hline
+				\end{tabular}
+			\end{center}
+		
+\makeatletter
+\@addtoreset{chapter}{part}
+\makeatother	
+	
+	\part{Theoretische Umsetzung}
+		
+		\chapter[Datenbank]{Grundlegende Informationen \"uber die Datenbank}
+			\index{Test}	
+			\section{Allgemeines}
+			\subsection{Anmerkungen}Alle im folgenden beschriebenen Angaben beziehen sich auf die Datenbanksoftware MariaDB. Die darin enthaltenen SQL-Anweisungen beziehen sich auch auf diese spezielle Datenbank.
+			\section{Tabellen}Die Daten wurden aus praktischen Gr\"unden in mehrere Tabellen unterteilt. Es existieren einige Tabellen mit Multiple-Foreign-Keys, diese stellen diverse M zu N Beziehungen dar. Einzelbeziehungen werden stets durch referenzierte Foreign-Keys dargestellt. Im Folgenden wird näher auf den Typen eines Feldes und dessen Inhalt eingegangen.
+			\subsection{bmbf\_\_auth}
+			\begin{enumerate}
+				\item uid
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} AutoIncrement, Uniqe, NotNull, Primary-Key
+				\subitem \underline{Bedeutung:} In diese Feld wird jedem Token eine Eindeutige ID zugeordnet.
+				\item token
+				\subitem \underline{Datentyp:} Varchar, L\"ange 190
+				\subitem \underline{Besonderheiten:} NotNull
+				\subitem \underline{Bedeutung:} In diesem Feld werden die Strings abgelegt, welche die Aufrufer in ihren Aufrufen zur Authentifikation verwenden. Diese bestehen aus einer Zeichenkette, welche aus Groß- und Kleinbuchstaben sowie Zahlen besteht. Durch das \hyperlink{ANT}{AddNewTool.py-Script} welches zur Erzeugung der Token genutzt wird, werden Duplikate verhindert.
+			\end{enumerate}
+			\leftskip=0cm
+				\subsubsection{Schl\"ussel}
+				\paragraph{Prim\"arer Schl\"ussel}Der Primärer Schlüssel in dieser Tabelle ist die ID. Da jeder Nutzertoken eindeutig und einfach seinen Events zugeordnet werden kann. Zugleich spart es auch Speicherplatz, in dem aus einem \textit{Varchar} ein Integer wird.
+				\paragraph{Fremdschl\"ussel}Diese Tabelle hat keine Fremdschl\"ussel.
+			\subsection{bmbf\_\_events}
+			\begin{enumerate}
+				\item id
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} AutoIncrement, PrimaryKey
+				\subitem \underline{Bedeutung:} Dies stellt die eindeutige Identifikation des Events dar.
+				\item organization
+				\subitem \underline{Datentyp:} Mediumtext
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Name der Organisation, für welche das PDF erstellt wird. Auch für den Inhalt des PDFs notwendig.
+				\item measure
+				\subitem \underline{Datentyp:} Mediumtext
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Ist die Bezeichnung der Maßnahme für welche eine Liste erstellt werden soll.
+				\item template
+				\subitem \underline{Datentyp:} int
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Enthalt eine ID aus der der Tabelle  \textit{bmbf\_\_templates} mit der ein bestimmtes Template beim Erzeugen der PDF ausgewählt werden kann.
+				\item measure\_periode
+				\subitem \underline{Datentyp:} mediumtext
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Ist eine Zeichenkette welche den Maßnahmenzeitraum beziffert. Wird unverändert in das Vorlagen-PDF geschrieben.
+			\end{enumerate}
+			\leftskip=0cm
+				\subsubsection{Schl\"ussel}
+				\paragraph{Prim\"arer Schl\"ussel}Der prim\"are Schl\"ussel in dieser Tabelle ist die ID. Da jedes Event eindeutig und einfach seinen Teilnehmern und Gruppen zugeordnet werden kann.
+				\paragraph{Fremdschl\"ussel}
+					\subparagraph{Template} \leftskip=1.5cm Im Feld \textit{template} werden nur Werte akzeptiert, welche auch in \textit{bmbf\_\_templates} als \textit{id}-Wert vorkommen.
+			\subsection{bmbf\_\_groups}
+			\begin{enumerate}
+				\item event
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Dies ordnet eine Gruppe einem Event zu.
+				\item group\_id
+				\subitem \underline{Datentyp:} Mediumtext
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Gruppen-Identifikator des aufrufenden Systems. In diesem System kein eindeutiger Identifikator.
+				\item ugid
+				\subitem \underline{Datentyp:} int
+				\subitem \underline{Besonderheiten:} Auto Increment, Primary Key
+				\subitem \underline{Bedeutung:} Stellt den eindeutigen Identifikator der Gruppe in diesem System dar.
+			\end{enumerate}
+			\subsubsection{Schl\"ussel}
+			\leftskip=0cm
+			\paragraph{Prim\"arer Schl\"ussel}Der prim\"are Schl\"ussel in dieser Tabelle ist die UGID. Da jede Gruppe eindeutig und einfach seinen Mitgliedern, welche Teilnehmer eines Events sind, zugeordnet kann.
+			\paragraph{Fremdschl\"ussel}
+			\subparagraph{event} \leftskip=1.5cm Im Feld \textit{event} werden nur Werte akzeptiert, welche auch in \textit{bmbf\_\_events} als \textit{id}-Wert vorkommen.
+			\subsection{bmbf\_\_mapping}
+			\begin{enumerate}
+				\item uid
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Dies stellt eine Nutzerzuordnung dar.
+				\item eid
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Dies stellt eine Eventzuordnung dar.
+			\end{enumerate}
+			\leftskip=0cm
+			\subsubsection{Schl\"ussel}
+			\paragraph{Prim\"arer Schl\"ussel}Diese Table hat keinen prim\"aren Schl\"ussel.
+			\paragraph{Fremdschl\"ussel}
+				\subparagraph{uid} \leftskip=1.5cm Im Feld \textit{uid} werden nur Werte akzeptiert, welche auch in \textit{bmbf\_\_auth} als \textit{id}-Wert vorkommen.
+				\subparagraph{eid} \leftskip=1.5cm Im Feld \textit{eid} werden nur Werte akzeptiert, welche auch in \textit{bmbf\_\_events} als \textit{id}-Wert vorkommen.
+			\subsection{bmbf\_\_participants}
+			\begin{enumerate}
+				\item id
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} Auto Increment, Primary Key
+				\subitem \underline{Bedeutung:} Dieses Feld dient der eindeutigen Identifikation eines Templates.
+				\item event
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Dies stellt eine Eventzuordnung dar.
+				\item name
+				\subitem \underline{Datentyp:} Mediumtext
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Dies ist der Name des Teilnehmers, welcher so auch in das Template-PDF geschrieben wird.
+				\item university
+				\subitem \underline{Datentyp:} Mediumtext
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Dies ist der Universitätsname des Teilnehmers, welcher so auch in das Template-PDF geschrieben wird.
+				\item grp
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} Kann Null sein
+				\subitem \underline{Bedeutung:} Dies stellt eine Gruppenzuordnung dar.
+			\end{enumerate}
+			\leftskip=0cm
+			\subsubsection{Schl\"ussel}
+			\paragraph{Prim\"arer Schl\"ussel}Der prim\"are Schl\"ussel in dieser Tabelle ist die ID. Sie dient zum eindeutigen Abrufen von Teilnehmern und zur eindeutigen Identifikation von Teilnehmern bei Problemen mit der Zeichenkodierung (Bspw.: Griechische UTF-8 Zeichen)
+			\paragraph{Fremdschl\"ussel}
+			\subparagraph{event} \leftskip=1.5cm Im Feld \textit{event} werden nur Werte akzeptiert, welche auch in \textit{bmbf\_\_events} als \textit{id}-Wert vorkommen.
+			\subparagraph{grp} \leftskip=1.5cm Im Feld \textit{grp} werden nur Werte akzeptiert, welche auch in \textit{bmbf\_\_groups} als \textit{ugid}-Wert vorkommen.
+			\subsection{bmbf\_\_templates}
+			\begin{enumerate}
+				\item id
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} Auto Increment, Primary Key
+				\subitem \underline{Bedeutung:} Dieses Feld dient der eindeutigen Identifikation eines Teilnehmers.
+				\item filename
+				\subitem \underline{Datentyp:} Mediumtext
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Dies ist der Dateiname des genutzen Templates, welcher zum Erzeugen der ausgefüllten PDFs benötigt wird.
+			\end{enumerate}
+			\leftskip=0cm
+			\subsubsection{Schl\"ussel}
+			\paragraph{Prim\"arer Schl\"ussel}Der prim\"are Schl\"ussel in dieser Tabelle ist die ID. Sie dient zum eindeutigen Abrufen von Daten zu einem Template.
+			\paragraph{Fremdschl\"ussel} Diese Tabelle hat keine Fremdschl\"ussel.
+			\subsection{bmbf\_\_times}
+			\begin{enumerate}
+				\item event
+				\subitem \underline{Datentyp:} Integer
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Dies stellt eine Eventzuordnung dar.
+				\item startdate
+				\subitem \underline{Datentyp:} Date
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Stellt das Anfangsdatum eines Events in Maschinenlesbarer weise dar.
+				\item enddate
+				\subitem \underline{Datentyp:} Date
+				\subitem \underline{Besonderheiten:} Not Null
+				\subitem \underline{Bedeutung:} Stellt das Enddatum eines Events in Maschinenlesbarer weise dar.
+			\end{enumerate}
+			\leftskip=0cm
+			\subsubsection{Schl\"ussel}
+			\paragraph{Prim\"arer Schl\"ussel}Diese Table hat keinen prim\"aren Schl\"ussel.
+			\paragraph{Fremdschl\"ussel} 
+			\subparagraph{event} \leftskip=1.5cm Im Feld \textit{event} werden nur Werte akzeptiert, welche auch in \textit{bmbf\_\_events} als \textit{id}-Wert vorkommen.
+\makeatletter
+\@addtoreset{chapter}{part}
+\makeatother
+
+	\leftskip=0cm
+	\part{Implementierung}
+		\chapter[Dateien]{Dateien}
+			
+			\hypertarget{ANT}{}
+			\section{AddNewTool.py}
+			\paragraph{Bedeutung und Besonderheiten}Fügt dem BMBF-Listen-Generator einen neuen API-Token hinzu und gibt diesen aus. Aus Anwendungssicht entsteht ein neuer Nutzer.
+			\subparagraph{Besonderheiten}Gibt den API-Token direkt auf der Konsole aus. Script bedarf keiner Input Parameter.
+			\paragraph{Funktionen:}
+			\begin{enumerate}
+				\item \textit{randomStringDigits(stringLength:int)} 
+			\end{enumerate}
+			\leftskip=1.5cm Gibt eine Zeichenkette bestehend aus der Anzahl der in \textit{stringLength} angegebenen Zeichen zurück. Es generiert den eigentlichen API-Token.
+			\begin{enumerate}[resume]
+				\item \textit{\_\_name\_\_=="\_\_main\_\_"}	
+			\end{enumerate}
+			\leftskip=1.5cm	Generiert einen API-Token mittels der Funktion \textit{randomStringDigits} und schreibt den erhaltenen Token einerseits in die Datenbank und andererseits gibt es den Token auf Konsole aus.
+			
+			\leftskip=0cm		
+
+			\section{bmbf\_main.py}
+			\paragraph{Bedeutung und Besonderheiten}Liest die Konfigurationsdatei ein und ruft dann \textit{generate\_bmbf\_list.mainDB(1)} oder \textit{generate\_bmbf\_list.mainFiles()} auf. Entscheiden wird das mittels der Einstellung \textit{config.use\_db}.
+			\subparagraph{Besonderheiten}Script bedarf keiner Input Parameter.
+			\paragraph{Funktionen:}
+			\begin{enumerate}
+				\item \textit{\_\_name\_\_=="\_\_main\_\_"}	
+			\end{enumerate}
+			\leftskip=1.5cm	Entscheidet in der oben beschrieben Art und Weise was es aufruft.
+			
+			\leftskip=0cm	
+			
+			\section{Commands.py}
+			\paragraph{Bedeutung und Besonderheiten}Stellt alle über die Web-API aufrufbaren Funktionen dar. Ist der Hauptteil der Websocket Implementierung. Hier wird jede Anfrage beantwortet. Die Funktionen werden von der \textit{webstart.py} aufgerufen.
+			\subparagraph{Besonderheiten}Darf nicht direkt aus der Konsole aufgerufen werden. Wird durch anderen Anwendungsteil aufgerufen. Jede Funktion prüft mittels des API-Token ob ein Nutzer berechtigt ist eine Aktion durch zu führen. Dies passiert mithilfe der Funktionen \textit{checkToken(token:string)} oder \textit{checkAccess(uid:Int,eid:Int)}. Sollte ein Nutzer nicht berechtigt sein, so wird Ihm mit einem \textit{"You shall not pass."} geantwortet.
+			\paragraph{Funktionen:}
+			\begin{enumerate}
+				\item \textit{NewPerson(p)} 
+			\end{enumerate}
+			\leftskip=1.5cm Stellt aus den in \textit{p} gegebenen Daten, welche in bestimmter weise als Array übergeben werden müssen, die Daten zum Anlegen eines neuen Teilnehmers in der Datenbank zusammen. Anschließend ruft es eine Funktion zum Schreiben in die Datenbank auf.
+			\begin{enumerate}[resume]
+				\item \textit{NewEvent(e)}
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt aus den in \textit{e} gegebenen Daten, welche in bestimmter weise als Array übergeben werden müssen, die Daten zum Anlegen eines neuen Events in der Datenbank zusammen. Es gibt die Event ID zurück. Besonderheit ist jedoch, das sich die Events mindestens in einem String unterscheiden müssen, damit die Funktion sauber arbeitet. Anschließend ruft es eine Funktion zum schreiben in die Datenbank auf. Auch wird ein Mapping von API-Token zu Event in die Datenbank geschrieben.
+			\begin{enumerate}[resume]
+				\item \textit{GeneratePDF(e)}
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt aus den in \textit{e} gegebenen Daten, welche in bestimmter weise als Array übergeben werden müssen, die Daten zum Erstellen des PDFs zusammen. Anschließend wird das PDF mittels der \textit{generate\_bmbf\_list.mainDB(eid:Int)} Funktion generiert.
+			\begin{enumerate}[resume]
+				\item \textit{RequestTemplates(token)}
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt mithilfe der in \textit{token} gegebenen Daten, welcher nur ein String sein, die Daten zum den Templates zusammen. 
+			\begin{enumerate}[resume]
+				\item \textit{\_\_name\_\_=="\_\_main\_\_"}	
+			\end{enumerate}
+			\leftskip=1.5cm	Generiert einen API-Token mittels der Funktion \textit{randomStringDigits} und schreibt den erhaltenen Token einerseits in die Datenbank und andererseits gibt es den Token auf Konsole aus.
+			
+			\leftskip=0cm
+			\section{config-sample.py}
+			\paragraph{Bedeutung und Besonderheiten}Stellt die Beispielkonfiguration dar. Die genutzte Konfigurationsdatei muss \textit{config.py} heißen und kann eine Kopie dieser Datei darstellen.
+			\subparagraph{Besonderheiten}Darf nicht direkt aus der Konsole aufgerufen werden. Wird durch anderen Anwendungsteil aufgerufen, andernfalls beendet es mit Code 1. Alle unten stehenden 'Funktionen' stellen Parameter der Software dar und sind keine Funktionen, sondern Werte.
+			\paragraph{Funktionen:}
+			\begin{enumerate}
+				\item \textit{use\_db} 
+			\end{enumerate}
+			\leftskip=1.5cm Dieser Parameter hat 2 Wertoptionen:
+			\begin{itemize}
+				\item \leftskip=1.5cm \textbf{False:} Es wird die Datenbank nicht genutzt.
+				\item \leftskip=1.5cm \textbf{True:} Es wird die Datenbank genutzt.
+			\end{itemize}
+			\subsection{Parameter für die Nutzung ohne Datenbank:}
+			\paragraph{Erkl\"arung}\leftskip=0cm Bei dieser Nutzungsvariante ist es nicht möglich Teilnehmerdaten aus der Datenbank zu lesen. Es wird ausschließlich aus den Dateiquellen gelesen.
+			\begin{enumerate}[resume]
+				\item \textit{measures\_period}
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt den Text dar, welcher in das entsprechende Feld der Template-PDF geschrieben wird. Es ist eine passende Zeichenkette anzugeben, die ohne \"Anderungen \"ubernommen wird. In diesem Fall wird der Maßnahmenzeitraum definiert.
+			\begin{enumerate}[resume]
+				\item \textit{date}
+			\end{enumerate}
+			\leftskip=1.5cm	Wird nicht in das PDF eingebettet. Stellt das Datum der Erstellung dar.
+			\begin{enumerate}[resume]
+				\item \textit{organization}
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt den Text dar, welcher in das entsprechende Feld der Template-PDF geschrieben wird. Es ist eine passende Zeichenkette anzugeben, die ohne \"Anderungen \"ubernommen wird. In diesem Fall wird die Organisation definiert.
+			\begin{enumerate}[resume]
+				\item \textit{measure}
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt den Text dar, welcher in das entsprechende Feld der Template-PDF geschrieben wird. Es ist eine passende Zeichenkette anzugeben, die ohne \"Anderungen \"ubernommen wird. In diesem Fall wird der Maßnahmentitel definiert.
+			\begin{enumerate}[resume]
+				\item \textit{csv\_file\_name}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss die CSV-Datei angegeben werden, in welcher die Teilnehmerdaten zu finden sind. Sie kann relativ angegeben werden.
+			\begin{enumerate}[resume]
+				\item \textit{template}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss die Template-PDF angegeben werden, welche verwendet werden soll. Sie kann relativ angegeben werden.
+			\begin{enumerate}[resume]
+				\item \textit{list\_dates}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss eine Auflistung aller Tage des Events angegeben werden. Die Tage sind in folgender weise anzugeben: \textit{DD.MM.YYYY}. Und in einem Python-Array zu schreiben. Dies muss dann folgendermaßen angegeben werden, durch eine andere Art der Angabe können Fehler entstehen: \textit{["DD.MM.YYYY", "DD.MM.YYYY"]}.
+			\subsection{Parameter für die Nutzung mit Datenbank:}
+			\paragraph{Erkl\"arung}\leftskip=0cm Bei dieser Nutzungsvariante ist es nicht möglich Teilnehmerdaten aus einer CSV zu lesen. Es wird ausschließlich aus der Datenbank gelesen.
+			\begin{enumerate}[resume]
+				\item \textit{db\_host}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss der Datenbankhost angegeben werden, dies kann auf 3 Varianten geschehen:
+			\begin{itemize}
+				\item \leftskip=1.5cm \textbf{Lokale Datenbank:} Dann kann hier der Wert \textit{localhost} angegeben werden, alternativ kann auch \textit{127.0.0.1} angegeben werden.
+				\item \leftskip=1.5cm \textbf{DNS-Adresse:} Dies ist folgendem Beispiel ähnlich an zu geben: \textit{example.com} 
+				\item \leftskip=1.5cm \textbf{IP-Adresse:} Dies ist folgendem regulärem Ausdruck entsprechend ähnlich an zu geben: \textit{\textbackslash d\{1,3\}.\textbackslash d\{1,3\}.\textbackslash d\{1,3\}.\textbackslash d\{1,3\}} 
+			\end{itemize}
+			\begin{enumerate}[resume]
+				\item \textit{db\_port}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss ein Integerwert angegeben werden, welcher den Port auf dem die Datenbank erreichbar ist darstellt.
+			\begin{enumerate}[resume]
+				\item \textit{db\_scheme}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss eine Zeichenkette angegeben werden, welches Datenbank Schema in der Datenbank verwendet werden soll.
+			\begin{enumerate}[resume]
+				\item \textit{db\_prefix}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss eine Zeichenkette angegeben werden, welches den Tabellennamen, die im verwendeten Schema in der Datenbank zu finden sind, voran steht.
+			\begin{enumerate}[resume]
+				\item \textit{db\_user}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss eine Zeichenkette angegeben werden, welche den Nutzernamen darstellt, mit welchem die in der Datenbank gearbeitet werden soll.
+			\begin{enumerate}[resume]
+				\item \textit{db\_password}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss eine Zeichenkette angegeben werden, welche das Passwort zum Nutzernamen darstellt, mit welchem die in der Datenbank gearbeitet werden soll.
+			\begin{enumerate}[resume]
+				\item \textit{dns}
+			\end{enumerate}
+			\leftskip=1.5cm	Hier muss eine Zeichenkette angegeben werden, welche die Adresse unter dem die API verfügbar ist angegeben werden.
+			\subsection{Allgemeine Parameter:}
+			\begin{enumerate}[resume]
+				\item \textit{empty\_sheets}
+			\end{enumerate}
+			\leftskip=1.5cm	Der hier angegebene Integerwert stellt die Anzahl der leeren Seiten pro Tag oder pro Tag und Gruppe dar.
+			\begin{enumerate}[resume]
+				\item \textit{debug}
+			\end{enumerate}
+			\leftskip=1.5cm	Es können 2 Werte angegeben werden:
+			\begin{itemize}
+				\item \leftskip=1.5cm \textbf{False:} Deaktiviert die Debug-Ausgaben.
+				\item \leftskip=1.5cm \textbf{True:} Aktiviert die Debug-Ausgaben.
+			\end{itemize}
+			\subsection{Funktion:}
+			\begin{enumerate}[resume]
+				\item \textit{\_\_name\_\_=="\_\_main\_\_"}	
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt sicher, dass die Datei nicht alleine ausgeführt wird und beendet den Aufruf mit Code 1.
+			
+			\leftskip=0cm
+							
+			\section{databaseConnect.py}
+			\paragraph{Bedeutung und Besonderheiten}Stellt die Verbindung zur Datenbank dar und beinhaltet alle benötigten Funktionen und Variablen oder fasst diese aus der Konfigurationsdatei zusammen.
+			\subparagraph{Besonderheiten}Darf nicht direkt aus der Konsole aufgerufen werden. Wird durch anderen Anwendungsteil aufgerufen.
+			\subsection{Variablen:}
+			\begin{enumerate}
+				\item \textit{dbConnectCfg} 
+			\end{enumerate}
+			\leftskip=1.5cm Stellt die Zusammenfassung aller Daten, die zum Verbinden zur Datenbank benötigt werden dar. Die Daten werden aus der Konfigurationsdatei gelesen.
+			\begin{enumerate}[resume]
+				\item \textit{alltemplates}
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt den \textit{SQL}-Befehl dar, mittels dessen alle Templates aus der DB gelesen werden können.
+			\begin{enumerate}[resume]
+				\item \textit{allevents}
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt den \textit{SQL}-Befehl dar, mittels dessen alle Events aus der DB gelesen werden können.
+			\subsection{Funktionen:}
+			\begin{enumerate}[resume]
+				\item \textit{QueryDB(query)}
+			\end{enumerate}
+			\leftskip=1.5cm	Führt die in \textit{query} \"ubergebene Abfrage, welche keine Parameter benötigt, aus und gibt das Ergebnis zur\"uck.
+			\begin{enumerate}[resume]
+				\item \textit{QueryDBParameter(query, par)}
+			\end{enumerate}
+			\leftskip=1.5cm	Führt die in \textit{query} \"ubergebene Abfrage, welche Parameter benötigt, die in \textit{par} gegeben sind, aus und gibt das Ergebnis zur\"uck.
+			\begin{enumerate}[resume]
+				\item \textit{QueryDBParameterWOO(query, par)}
+			\end{enumerate}
+			\leftskip=1.5cm	Führt die in \textit{query} \"ubergebene Abfrage, welche Parameter benötigt, die in \textit{par} gegeben sind, aus und gibt kein Ergebnis zur\"uck.
+			\begin{enumerate}[resume]
+				\item \textit{ReadAllTemplates()}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Templates welche in der Datenbank zu finden sind zur\"uck.
+			\begin{enumerate}[resume]
+				\item \textit{ReadSpecificTemplate(id)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt die Daten zu einem speziellen Template zurück. Die Daten werden mithilfe des \textit{id}-Paramters gesucht.
+			\begin{enumerate}[resume]
+				\item \textit{ReadAllEvents():}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Events welche in der Datenbank zu finden sind zur\"uck.
+			\begin{enumerate}[resume]
+				\item \textit{GetGroupsByEID(eid)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Gruppen, welche in der Datenbank zu einem bestimmten Event zu finden sind zur\"uck. Das Event wird mittels der Event-ID \"ubergeben, welche im Parameter \textit{eid} zu finden ist.
+			\begin{enumerate}[resume]
+				\item \textit{GetParticipantsByEIDGID(eid, gid)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Teilnehmer, welche in der Datenbank zu einem bestimmten Event und in einer bestimmten Gruppe des Events zu finden sind zur\"uck. Das Event wird mittels der Event-ID \"ubergeben, welche im Parameter \textit{eid} zu finden ist. Die Gruppe wird mittels der Gruppen-ID \"ubergeben, welche im Parameter \textit{gid} zu finden ist.
+			\begin{enumerate}[resume]
+				\item \textit{ReadPersonsWOG(eid)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Teilnehmer, welche in der Datenbank zu einem bestimmten Event zu finden sind zur\"uck. Das Event wird mittels der Event-ID \"ubergeben, welche im Parameter \textit{eid} zu finden ist. 
+			\begin{enumerate}[resume]
+				\item \textit{checkGrp(id)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Gruppen, welche in der Datenbank zu einem bestimmten Event zu finden sind zur\"uck. Das Event wird mittels der Event-ID \"ubergeben, welche im Parameter \textit{id} zu finden ist.
+			\begin{enumerate}[resume]
+				\item \textit{ReadEventWG(id)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Daten eines Events mit Gruppen mit allen Teilnehmern zur\"uck. Das Event wird mittels der Event-ID \"ubergeben, welche im Parameter \textit{id} zu finden ist. 
+			\begin{enumerate}[resume]
+				\item \textit{ReadEventWOG(id)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Daten eines Events ohne Gruppen mit allen Teilnehmern zur\"uck. Das Event wird mittels der Event-ID \"ubergeben, welche im Parameter \textit{id} zu finden ist. 
+			\begin{enumerate}[resume]
+				\item \textit{ReadListOfDays(id)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt eine Liste der Tage eines Events zur\"uck. Das Event wird mittels der Event-ID \"ubergeben, welche im Parameter \textit{id} zu finden ist. 
+			\begin{enumerate}[resume]
+				\item \textit{insertEvent(e)}
+			\end{enumerate}
+			\leftskip=1.5cm	F\"ugt ein neues Event dazu und gibt die Event-ID zu\"urck. Die dazu benötigten Daten werden aus dem Parameter \textit{e} gelesen. Dieser Parameter muss folgende Elemente beinhalten:
+			\begin{itemize}
+				\item \leftskip=1.5cm organization
+				\item \leftskip=1.5cm measure
+				\item \leftskip=1.5cm template
+				\item \leftskip=1.5cm measure\_periode
+				\item \leftskip=1.5cm startdate
+				\item \leftskip=1.5cm enddate
+			\end{itemize}
+			\begin{enumerate}[resume]
+				\item \textit{insertPerson(e)}
+			\end{enumerate}
+			\leftskip=1.5cm	F\"ugt einen Teilnehmer zu einem Event dazu. Die dazu benötigten Daten werden aus dem Parameter \textit{e} gelesen. Dieser Parameter muss folgende Elemente beinhalten:
+			\begin{itemize}
+				\item \leftskip=1.5cm eid
+				\item \leftskip=1.5cm name
+				\item \leftskip=1.5cm university
+				\item \leftskip=1.5cm gid
+			\end{itemize}
+			\begin{enumerate}[resume]
+				\item \textit{GetGroupByEID(eid)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt alle Gruppen eines Events zur\"uck. Das Event wird mittels der Event-ID \"ubergeben, welche im Parameter \textit{id} zu finden ist. Die R\"uckgabewerte sind in einem Array enthalten, welches keine Schlüssel besitzt.
+			\begin{enumerate}[resume]
+				\item \textit{InsertGrp(eid, gid)}
+			\end{enumerate}
+			\leftskip=1.5cm	F\"ugt eine Gruppe zu einem Event dazu. Die dazu benötigten Daten werden aus dem Parametern \textit{eid} und \textit{gid} gelesen, wobei \textit{gid} die Gruppen-ID des Aufrufers und \textit{eid} die Event-ID darstellt.
+			\begin{enumerate}[resume]
+				\item \textit{InsertTokenToDB(token)}
+			\end{enumerate}
+			\leftskip=1.5cm	F\"ugt einen neuen Token in die Datenbank ein. Die dazu benötigten Daten werden aus dem Parameter \textit{token} gelesen.
+			\begin{enumerate}[resume]
+				\item \textit{InsertMapping(uid, eid)}
+			\end{enumerate}
+			\leftskip=1.5cm	F\"ugt einen Zuweisung von Nutzer zu neu erstelltem Event in die Datenbank ein. Die dazu benötigten Daten werden aus dem Parametern \textit{uid} und \textit{eid} gelesen. Wobei \textit{uid} die Nutzer-ID oder Token-ID und \textit{eid} die Event-ID darstellt.
+			\begin{enumerate}[resume]
+				\item \textit{checkAccess(token, eid)}
+			\end{enumerate}
+			\leftskip=1.5cm	Pr\"uft den Zugriff auf ein Event mithilfe des API-Tokens des Aufrufers. Die dazu benötigten Daten werden aus dem Parametern \textit{token} und \textit{eid} gelesen. Wobei \textit{token} den Token des Aufrufers und \textit{eid} die Event-ID darstellt. Der Rückgabe Wert ist einer folgenden 2 Werte:
+			\begin{itemize}
+				\item \leftskip=1.5cm \textbf{True:} Der Zugriff auf ein Event ist erlaubt.
+				\item \leftskip=1.5cm \textbf{False:} Der Zugriff auf ein Event ist nicht erlaubt.
+			\end{itemize}
+				\begin{enumerate}[resume]
+				\item \textit{checkToken(token)}
+			\end{enumerate}
+			\leftskip=1.5cm	Pr\"uft den Zugriff mithilfe des API-Tokens des Aufrufers. Die dazu benötigten Daten werden aus dem Parameter \textit{token} gelesen. Wobei \textit{token} den Token des Aufrufers und darstellt. Der Rückgabe Wert ist einer folgenden 2 Werte:
+			\begin{itemize}
+				\item \leftskip=1.5cm \textbf{True:} Der Token ist g\"ultig.
+				\item \leftskip=1.5cm \textbf{False:} Der Token ist ung\"ultig.
+			\end{itemize}
+			\begin{enumerate}[resume]
+				\item \textit{getUidFromToken(token)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt die User-ID des Aufrufers zur\"uck. Die dazu benötigten Daten werden aus dem Parameter \textit{token} gelesen. Wobei \textit{token} den Token des Aufrufers und darstellt. 
+			\begin{enumerate}[resume]
+				\item \textit{\_\_name\_\_=="\_\_main\_\_"}	
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt sicher, dass die Datei nicht alleine ausgeführt wird und beendet den Aufruf mit Code 1.
+			
+			\leftskip=0cm
+
+			\section{generate\_bmbf\_list.py}
+			\paragraph{Bedeutung und Besonderheiten}Enth\"alt alle Variablen und Funktionen, welche zum erstellen der PDF ben\"otigt werden.
+			\subparagraph{Besonderheiten}Darf nicht direkt aus der Konsole aufgerufen werden. Wird durch anderen Anwendungsteil aufgerufen.
+			\subsection{Variablen:}
+			\begin{enumerate}
+				\item \textit{form\_mapping} 
+			\end{enumerate}
+			\leftskip=1.5cm Stellt eine Liste in einer Liste dar mit den Namen der Felder f\"ur die Teilnehmer in der Vorlagen PDF dar.
+			\subsection{Funktionen:}
+			\begin{enumerate}[resume]
+				\item \textit{readcsv(csv\_file\_name)}
+			\end{enumerate}
+			\leftskip=1.5cm	Liest die im \"ubergebenen Parameter angegebene Datei als CSV ein und gibt ein Array mit den gelesenen Daten zur\"uck.
+			\begin{enumerate}[resume]
+				\item \textit{generate\_pdfs(persons, massnahmenzeitraum, datum, kif\_ev, massname, leer\_blaetter, template)}
+			\end{enumerate}
+			\leftskip=1.5cm Generiert das PDF eines Tages in der Nutzungsvariante ohne Datenbank.
+			\begin{enumerate}[resume]
+				\item \textit{generate\_pdfsDB(persons, massnahmenzeitraum, datum, kif\_ev, massname, leer\_blaetter, template, page)}
+			\end{enumerate}
+			\leftskip=1.5cm	Generiert das PDF eines Tages in der Nutzungsvariante mit Datenbank.
+			\begin{enumerate}[resume]
+				\item \textit{mainFiles()}
+			\end{enumerate}
+			\leftskip=1.5cm	Ist die Hauptfunktion dieser Datei, falls das Tool ohne Datenbank verwendet wird und generiert das gewollte PDF.
+			\begin{enumerate}[resume]
+				\item \textit{mainDB(id)}
+			\end{enumerate}
+			\leftskip=1.5cm	Ist die Hauptfunktion dieser Datei, falls das Tool ohne Datenbank verwendet wird und generiert das gewollte PDF des Events, welches mithilfe des \textit{id}-Parameters ausgew\"ahlt wird.
+			\begin{enumerate}[resume]
+				\item \textit{\_\_name\_\_=="\_\_main\_\_"}	
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt sicher, dass die Datei nicht alleine ausgeführt wird und beendet den Aufruf mit Code 1.
+			
+			\leftskip=0cm
+
+			\section{helper.py}
+			\paragraph{Bedeutung und Besonderheiten}Enth\"alt ben\"otigte Hilfsfunktionen für die Anwendung.
+			\subparagraph{Besonderheiten}Darf nicht direkt aus der Konsole aufgerufen werden. Wird durch anderen Anwendungsteil aufgerufen.
+			\paragraph{Funktionen:}
+			\begin{enumerate}
+				\item \textit{sha256name(filename)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gibt die SHA256-Summe der angegeben Datei zur\"uck.
+			\begin{enumerate}[resume]
+				\item \textit{renameFile(old)}
+			\end{enumerate}
+			\leftskip=1.5cm Benennt die Datei welche in \textit{old} benannt ist um. Der neue Dateiname wird mithilfe der \textit{sha256name}-Funktion bestimmt und anschließend zur\"uck gegeben.
+			\begin{enumerate}[resume]
+				\item \textit{assimilatePersons(personList)}
+			\end{enumerate}
+			\leftskip=1.5cm	Gleicht die Daten aus der Datenbank f\"ur den von der KIF e.V. \"ubernommen Teil an.
+			\begin{enumerate}[resume]
+				\item \textit{MySQLEscape(input)}
+			\end{enumerate}
+			\leftskip=1.5cm	Kapselt die SQL-Escape Funktion.
+			\begin{enumerate}[resume]
+				\item \textit{GarbageCollect(files)}
+			\end{enumerate}
+			\leftskip=1.5cm	L\"oscht alle im \textit{files}-Paramter angegebenen Dateien.
+			\begin{enumerate}[resume]
+				\item \textit{RenumberPersons(event)}
+			\end{enumerate}
+			\leftskip=1.5cm	Nummeriert die Liste der Teilnehmer neu, da die Datenbank IDs der Teilnehmer nicht bei 1 beginnen muss.
+			\begin{enumerate}[resume]
+				\item \textit{\_\_name\_\_=="\_\_main\_\_"}	
+			\end{enumerate}
+			\leftskip=1.5cm	Stellt sicher, dass die Datei nicht alleine ausgeführt wird und beendet den Aufruf mit Code 1.
+			
+			\leftskip=0cm
+						
+			\section{webstart.py}
+			\paragraph{Bedeutung und Besonderheiten}Stellt die Startdatei f\"ur den Websocket dar.
+			\subparagraph{Besonderheiten}Es werden keine Startparameter ben\"otigt.
+			\paragraph{Funktionen:}
+			\begin{enumerate}
+				\item \textit{test()}
+			\end{enumerate}
+			\leftskip=1.5cm	Ist eine Testfunktion f\"ur das Senden von API-Requests, ben\"otigt keine Authentifikation mittels API-Token.
+			\begin{enumerate}[resume]
+				\item \textit{bmbf()}
+			\end{enumerate}
+			\leftskip=1.5cm Stellt die Aufteilung der Anforderung die Mittels API-Request gestellt wird dar.
+			\begin{enumerate}[resume]
+				\item \textit{get\_pdf(id=None)}
+			\end{enumerate}
+			\leftskip=1.5cm	Sendet das PDF dem Aufrufer zurück. Es stellt keinen API-Aufruf dar.
+			\begin{enumerate}[resume]
+				\item \textit{\_\_name\_\_=="\_\_main\_\_"}	
+			\end{enumerate}
+			\leftskip=1.5cm	Startet das Websocket.
+			
+			\leftskip=0cm
+								
+\makeatletter
+\@addtoreset{chapter}{part}
+\makeatother   
+    	
+    \part{API-Schnittstellenbeschreibung}
+    	\chapter{Request}
+    		\section{Event anlegen}
+    		\paragraph{Bedeutung} Dient zum erstellen eines neuen Events. Alle \"ubergebenen Daten werden der Datenbank hinzugef\"ugt.
+			\begin{lstlisting}[language=JSON]
+{
+	"token" : "Put Your Token here",
+	"type" : "NE",
+	"organization" : "Your Organization",
+	"measure" : "Your Measure Titel",
+	"template" : 2,
+	"measure_periode" : "dd.mm-dd.mm.yyyy",
+	"startdate" : "yyyy-mm-dd",
+	"enddate" : "yyyy-mm-dd"
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{token:}Hier bitte den API-Token des Aufrufers einf\"ugen.
+			\paragraph{type:}Muss hier unbedingt "NE" sein.
+			\paragraph{organization:}Hier bitte den Namen der Organisation hineinschreiben.
+			\paragraph{measure:}Hier bitte den Maßnahmentitel hineinschreiben.
+			\paragraph{template:}Hier bitte die ID des gew\"unschten Templates einf\"ugen.
+			\paragraph{measure\_periode:}Hier bitte den Maßnahmenzeitraum angeben.
+			\paragraph{startdate:}Hier bitte den Starttag angeben.
+			\subparagraph{Besondertheit} \leftskip=1.5cm Muss im Format \textit{YYYY-MM-DD} angegeben werden.
+			\paragraph{enddate:} \leftskip=0cm Hier bitte den Endtag angeben.
+			\subparagraph{Besondertheit} \leftskip=1.5cm Muss im Format \textit{YYYY-MM-DD} angegeben werden.
+			
+			\leftskip=0cm
+			
+			\section{Templates abrufen}
+			\paragraph{Bedeutung} Sendet dem Aufrufer alle Daten zu den verf\"ugbaren Templates zu.
+			\begin{lstlisting}[language=JSON]
+{
+	"token" : "Put Your Token here",
+	"type" : "RT"
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{token:}Hier bitte den API-Token des Aufrufers einf\"ugen.
+			\paragraph{type:}Muss hier unbedingt "RT" sein.
+						
+			\section{Neue Person mit Gruppe anlegen}
+			\paragraph{Bedeutung} Legt einen Teilnehmer mit Gruppe im angegebenen Event an.
+			\begin{lstlisting}[language=JSON]
+{
+	"token" : "Put Your Token here",
+	"type" : "NP",
+	"eid" : 1,
+	"Name" : "Mia Killing",
+	"University" : "Freie Universität Mordor",
+	"gid" : 7
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{token:}Hier bitte den API-Token des Aufrufers einf\"ugen.
+			\paragraph{type:}Muss hier unbedingt "NP" sein.
+			\paragraph{eid:}Hier bitte die Event-ID des Events einf\"ugen, zu dem ein Teilnehmer hinzugef\"ugt werden soll.
+			\paragraph{Name:}Hier bitte den Namen des Teilnehmers einf\"ugen.
+			\paragraph{University:}Hier bitte den Namen der Universit\"at des Teilnehmers einf\"ugen.
+			\paragraph{gid}Hier bitte die Gruppe des Teilnehmers im gew\"unschten Event hinzuf\"ugen.
+
+			\section{Neue Person ohne Gruppe anlegen}
+			\paragraph{Bedeutung} Legt einen Teilnehmer ohne Gruppe im angegebenen Event an.
+			\begin{lstlisting}[language=JSON]
+{
+	"token" : "Put Your Token here",
+	"type" : "NP",
+	"eid" : 1,
+	"Name" : "Mia Killing",
+	"University" : "Freie Universität Mordor"
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{token:}Hier bitte den API-Token des Aufrufers einf\"ugen.
+			\paragraph{type:}Muss hier unbedingt "NP" sein.
+			\paragraph{eid:}Hier bitte die Event-ID des Events einf\"ugen, zu dem ein Teilnehmer hinzugef\"ugt werden soll.
+			\paragraph{Name:}Hier bitte den Namen des Teilnehmers einf\"ugen.
+			\paragraph{University:}Hier bitte den Namen der Universit\"at des Teilnehmers einf\"ugen.
+			
+			\section{PDF generieren}
+			\paragraph{Bedeutung} Legt einen Teilnehmer ohne Gruppe im angegebenen Event an.
+			\begin{lstlisting}[language=JSON]
+{
+	"token" : "Put Your Token here",
+	"type" : "GP",
+	"eid" : 1
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{token:}Hier bitte den API-Token des Aufrufers einf\"ugen.
+			\paragraph{type:}Muss hier unbedingt "GP" sein.
+			\paragraph{eid:}Hier bitte die Event-ID des Events einf\"ugen, zu dem das PDF generiert werden soll.
+			
+		\chapter{Reply}
+			\section{Event anlegen}
+			\paragraph{Bedeutung} Ist die Antwort auf die Anfrage zum anlegen eines neuen Events.
+			\begin{lstlisting}[language=JSON]
+{
+	"enddate" : "yyyy-mm-dd",
+	"id": 12,
+	"measure" : "Your Measure Titel",
+	"measure_periode" : "dd.mm-dd.mm.yyyy",
+	"organization" : "Your Organization",
+	"startdate" : "yyyy-mm-dd",
+	"template": 2,
+	"type": "NE"
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{organization:}Hier steht der Namen der Organisation.
+			\paragraph{measure:}Hier steht der Maßnahmentitel.
+			\paragraph{template:}Hier steht die ID des gew\"unschten Templates.
+			\paragraph{measure\_periode:}Hier steht der Maßnahmenzeitraum.
+			\paragraph{startdate:}Hier steht der Starttag.
+			\subparagraph{Besondertheit} \leftskip=1.5cm Ist im Format \textit{YYYY-MM-DD} angegeben.
+			\paragraph{enddate:} \leftskip=0cm Hier steht der Endtag.
+			\subparagraph{Besondertheit} \leftskip=1.5cm Ist im Format \textit{YYYY-MM-DD} angegeben.
+			\paragraph{id:} \leftskip=0cm Hier steht die Id des neu erstellten Events.
+			
+			\leftskip=0cm
+			
+			\section{Templates abrufen}
+			\paragraph{Bedeutung} Ist die Antwort auf die Abfrage aller Templates.
+			\begin{lstlisting}[language=JSON]
+[
+	{
+		"filename": "xxx.pdf",
+		"id": 1
+	},
+	{
+		"filename": "xxx.pdf",
+		"id": 2
+	}
+]
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{filename:}Hier steht der Dateiname des PDF-Templates.
+			\paragraph{id:}Muss steht die ID des PDF-Templates.
+			
+			\section{Neue Person mit Gruppe anlegen}
+			\paragraph{Bedeutung} Ist die Antwort auf die Anfrage zum erstellen eines neuen Teilnehmers mit Gruppe.
+			\begin{lstlisting}[language=JSON]
+{
+	"result": null
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{result:}Hier steht das Ergebnis der SQL-Abfrage.
+			\subparagraph{Besonderheit} \leftskip=1.5cm Der Wert \textit{null} ist der zu erwartende Wert.
+			
+			\leftskip=0cm
+			
+			\section{Neue Person ohne Gruppe anlegen}
+			\paragraph{Bedeutung} Ist die Antwort auf die Anfrage zum erstellen eines neuen Teilnehmers ohne Gruppe.
+			\begin{lstlisting}[language=JSON]
+{
+	"result": null
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{result:}Hier steht das Ergebnis der SQL-Abfrage.
+			\subparagraph{Besonderheit} \leftskip=1.5cm Der Wert \textit{null} ist der zu erwartende Wert.
+			
+			\leftskip=0cm
+			
+			\section{PDF generieren}
+			\paragraph{Bedeutung} Stellt die Antwort auf die Anfrage zum generieren eines PDFs dar.
+			\begin{lstlisting}[language=JSON]
+{
+"result": "generated",
+"File" : "URL"
+}
+			\end{lstlisting}
+			\subsection{Parameter}
+			\paragraph{result:}Ist der Status des Documentes.
+			\subparagraph{Besonderheit} \leftskip=1.5cm Der zu erwartende Wert ist \textit{generated}. 
+			\paragraph{File:} \leftskip=0cm Hier steht der Web-Pfad zum Download des generierten PDFs.   
+    
+    \part{Glossar}
+    
+    \paragraph{Array:} Programmstruktur; eine eindimensionale Reihe von Zellen
+    \paragraph{AutoIncrement:} die Zahl wird vom System bei jedem neuen Anlegen hochgezählt
+    \paragraph{Boolean/boolscher Wert:} Datentyp; nimmt stehts nur einen von zwei möglichen Werten an, meist wahr oder falsch
+    \paragraph{CamelCase:} Schreibweise in Quellcode, bei der Worttrennung mittels Großbuchstaben in einem Wort erfolgt; einBeispiel statt ein Beispiel
+    \paragraph{Client:} Nutzerprogramm
+    \paragraph{Get Methode/Getter:} Methode, die das Lesen einer privaten Variable ermöglicht
+    \paragraph{GUI:} Grafische Benutzeroberläche (Graphic User Interface)
+    \paragraph{hash/hashing:} ein effizienter Algorithmus zur Speicherung und Suche von Daten auf Tabellen
+    \paragraph{ID:} Identifikationsnummer
+    \paragraph{Integer:} Datentyp; eine Ganzzahl
+    \paragraph{MEDIUMTEXT:} MySQL spezifischer Datentyp; wie Varchar kann aber bis ca 16 mio Zeichen enthalten
+    \paragraph{NotNull:} gibt an, dass ein Feld/eine Zelle einen Eintrag haben muss
+    \paragraph{persistent:} dauerhaft
+    \paragraph{private Variable:} Eintrag, der nur in einem kleinem (privaten) Umfeld gelesen oder beschrieben werden kann
+    \paragraph{public Variable:} Eintrag der in einem weiten (öffentlichen) Umfeld gelesen oder beschrieben werden kann
+    \paragraph{Set Methode/Setter:} Methode die das Schreiben in einer privaten Variable ermöglicht
+    \paragraph{SQL Foreign-Key/Fremdschl\"ussel:} Fremdschlüssel; Eintrag um auf Elemente aus anderen Tabellen einer Datenbank zu verweisen
+    \paragraph{SQL Key:} Schlüsseleintrag um einen Datenbankelement zu identifizieren
+    \paragraph{SQL Varchar:} Datentyp; enthält eine Menge von Buchstaben, Sonderzeichen o.ä. Die Zahl in der Klammer gibt die maximale Länge an
+    \paragraph{String:} Datentyp; wie Varchar aber nicht SQL spezifisch, Länge beliebig
+    \paragraph{Unique:} (hier) ein Eintrag in einer Datenbankspalte, der sich von allen anderen unterscheidet
+    \paragraph{Primary Key/Schl\"ussel/Prim\"arer Schl\"ussel:} Bezeichnet ein Feld, mithilfe dessen sich ein Datensatz eindeutig Identifizieren lässt.
+
+	%\begin{thebibliography}{999}
+		
+	%\end{thebibliography}
+\end{document}
