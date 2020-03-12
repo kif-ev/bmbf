@@ -4,3 +4,4 @@ pathlib
 mysql-connector-python
 PyMySQL
 flask
+mysqlclient
